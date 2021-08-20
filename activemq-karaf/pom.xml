@@ -42,7 +42,7 @@
     <dependency>
       <groupId>org.ops4j.pax.logging</groupId>
       <artifactId>pax-logging-api</artifactId>
-      <version>1.11.4</version>
+      <version>1.11.9</version>
     </dependency>
     <dependency>
       <groupId>org.ops4j.pax.logging</groupId>
@@ -165,7 +165,7 @@
                 </artifact>
                 <artifact>
                   <file>target/classes/activemq.xml</file>
-                  <type>xml</type>&gt;
+                  <type>xml</type>>
                   <classifier>activemq</classifier>
                 </artifact>
                 <artifact>
