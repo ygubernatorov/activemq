@@ -52,7 +52,7 @@
     <commons-io-version>2.11.0</commons-io-version>
     <commons-lang-version>3.12.0</commons-lang-version>
     <commons-logging-version>1.2</commons-logging-version>
-    <commons-pool2-version>2.10.0</commons-pool2-version>
+    <commons-pool2-version>2.11.0</commons-pool2-version>
     <commons-primitives-version>1.0</commons-primitives-version>
     <commons-net-version>3.8.0</commons-net-version>
     <directory-version>2.0.0.AM25</directory-version>
@@ -157,7 +157,7 @@
     <activemq.osgi.export>${activemq.osgi.export.pkg}*;version=${activemq.osgi.export.version};-noimport:=true</activemq.osgi.export>
     <activemq.osgi.export.version>${project.version}</activemq.osgi.export.version>
     <activemq.osgi.import>${activemq.osgi.import.pkg}</activemq.osgi.import>
-    <activemq.osgi.dynamic.import />
+    <activemq.osgi.dynamic.import/>
     <activemq.osgi.symbolic.name>${project.groupId}.${project.artifactId}</activemq.osgi.symbolic.name>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
@@ -1204,7 +1204,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
                 <pluginExecution>
@@ -1217,7 +1217,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
                 <pluginExecution>
@@ -1230,7 +1230,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <execute />
+                    <execute/>
                   </action>
                 </pluginExecution>
                 <pluginExecution>
@@ -1243,7 +1243,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
                 <pluginExecution>
@@ -1256,7 +1256,7 @@
                     </goals>
                   </pluginExecutionFilter>
                   <action>
-                    <ignore />
+                    <ignore/>
                   </action>
                 </pluginExecution>
               </pluginExecutions>
