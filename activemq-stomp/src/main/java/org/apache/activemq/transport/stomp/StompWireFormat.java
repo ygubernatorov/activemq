@@ -27,6 +27,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PushbackInputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
@@ -182,38 +183,51 @@ public class StompWireFormat implements WireFormat {
         }
     }
 
-    private String readLine(DataInput in, int maxLength, String errorMessage) throws IOException {
+    private String readActionLine(DataInput in, int maxLength, String errorMessage) throws IOException {
         ByteSequence sequence = readHeaderLine(in, maxLength, errorMessage);
+        return asSingleHeaderString(sequence);
+    }
+
+    private String asSingleHeaderString(final ByteSequence sequence) throws UnsupportedEncodingException {
         return new String(sequence.getData(), sequence.getOffset(), sequence.getLength(), "UTF-8").trim();
     }
 
     private ByteSequence readHeaderLine(DataInput in, int maxLength, String errorMessage) throws IOException {
         boolean isEscaping = false;
-        byte b;
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream(maxLength);
-        while ((b = in.readByte()) != '\n') {
-            if (outputStream.size() > maxLength) {
-                outputStream.close();
+        byte nextByte;
+        Byte firstInvalidEscapeCharacter = null;
+        ByteArrayOutputStream byteReaderOutputStream = new ByteArrayOutputStream(maxLength);
+        while ((nextByte = in.readByte()) != '\n') {
+            if (byteReaderOutputStream.size() > maxLength) {
+                byteReaderOutputStream.close();
                 throw new ProtocolException(errorMessage, true);
             }
-            if (isEscaping) {
-                if (!isValidEscapedCharacter(b)) {
-                    throw new ProtocolException("Undefined escape sequence [\\"+((char) (b & 0xFF))+"] found in header!", true);
+            if (firstInvalidEscapeCharacter == null) {
+                if (isEscaping) {
+                    if (!isValidEscapedCharacter(nextByte)) {
+                        firstInvalidEscapeCharacter = nextByte;
+                    }
+                    isEscaping = false;
+                } else if (nextByte == Stomp.ESCAPE) {
+                    isEscaping = true;
                 }
-                isEscaping = false;
-            } else if (b == Stomp.ESCAPE) {
-                isEscaping = true;
             }
-            outputStream.write(b);
+            byteReaderOutputStream.write(nextByte);
         }
 
-        outputStream.close();
-        ByteSequence line = outputStream.toByteSequence();
+        byteReaderOutputStream.close();
+        ByteSequence line = byteReaderOutputStream.toByteSequence();
 
         if (stompVersion.equals(Stomp.V1_0) || stompVersion.equals(Stomp.V1_2)) {
             int lineLength = line.getLength();
             if (lineLength > 0 && line.data[lineLength-1] == '\r') {
                 line.setLength(lineLength-1);
+            }
+        }
+
+        if (firstInvalidEscapeCharacter != null && !stompVersion.equals(Stomp.V1_0)) {
+            if (!isConnectCommand(asSingleHeaderString(line))) {// although it's inefficient, we're forced to check this per spec
+                throw new ProtocolException("Undefined escape sequence [\\" + ((char) (firstInvalidEscapeCharacter & 0xFF)) + "] found in header!", true);
             }
         }
         return line;
@@ -234,22 +248,37 @@ public class StompWireFormat implements WireFormat {
         return false;
     }
 
+    /* Will cover CONNECT and CONNECTED use case per spec - https://stomp.github.io/stomp-specification-1.2.html#Connecting */
+    private boolean isConnectCommand(final String headerString) {
+        int indexWithinConnectWord = 0;
+        for (int indexInHeader = 0; indexInHeader < headerString.length() && indexWithinConnectWord < "CONNECT".length(); indexInHeader++) {
+            if (headerString.charAt(indexInHeader) == "CONNECT".charAt(indexWithinConnectWord)) {
+                indexWithinConnectWord++;
+            }
+        }
+        return indexWithinConnectWord == "CONNECT".length();
+    }
+
     protected String parseAction(DataInput in, AtomicLong frameSize) throws IOException {
         String action = null;
 
         // skip white space to next real action line
-        while (true) {
-            action = readLine(in, MAX_COMMAND_LENGTH, "The maximum command length was exceeded");
+        do {
+            action = readActionLine(in, MAX_COMMAND_LENGTH, "The maximum command length was exceeded");
             if (action == null) {
                 throw new IOException("connection was closed");
+            }
+            action = action.trim();
+        } while(action.length() == 0);
+        frameSize.addAndGet(action.length());
+
+        if (action.contains("\\") && isConnectCommand(action)) {
+            if (action.indexOf("E") >= 0 && action.indexOf("D") > action.indexOf("E")) {
+                action = "CONNECTED";
             } else {
-                action = action.trim();
-                if (action.length() > 0) {
-                    break;
-                }
+                action = "CONNECT";
             }
         }
-        frameSize.addAndGet(action.length());
         return action;
     }
 

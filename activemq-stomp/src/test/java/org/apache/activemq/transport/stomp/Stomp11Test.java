@@ -1157,6 +1157,37 @@ public class Stomp11Test extends StompTestSupport {
         assertTrue(stompFrame.getHeaders().get("message").equals("Undefined escape sequence [\\x] found in header!"));
     }
 
+    @Test(timeout = 60000)
+    public void testStompHeaderWithUndefinedEscapeSequenceInAllowedConnectHeader() throws Exception {
+        String connectFrame = "CONN\\xECT\n" +
+            "login:system\n" +
+            "passcode:manager\n" +
+            "accept-version:1.1\n" +
+            "host:localhost\n" +
+            "\n" + Stomp.NULL;
+        stompConnection.sendFrame(connectFrame);
+        String f = stompConnection.receiveFrame();
+        LOG.debug("Broker sent: " + f);
+        assertTrue(f.startsWith("CONNECTED"));
+    }
+
+    @Test(timeout = 60000)
+    public void testStompHeaderWithInvalidConnectHeader() throws Exception {
+        String connectFrame = "CONN@ECT\n" +
+            "login:system\n" +
+            "passcode:manager\n" +
+            "accept-version:1.1\n" +
+            "host:localhost\n" +
+            "\n" + Stomp.NULL;
+        stompConnection.sendFrame(connectFrame);
+
+        StompFrame stompFrame = stompConnection.receive();
+
+        LOG.info("Broker sent: " + stompFrame);
+        assertTrue(stompFrame.getAction().equals("ERROR"));
+        assertTrue(stompFrame.getHeaders().containsKey("message"));
+        assertTrue(stompFrame.getHeaders().get("message").equals("Unknown STOMP action: CONN@ECT"));
+    }
 
     @Test(timeout = 60000)
     public void testTransactionRollbackAllowsSecondAckOutsideTXClientAck() throws Exception {
