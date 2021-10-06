@@ -16,19 +16,6 @@
  */
 package org.apache.activemq.web;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Set;
-
-import javax.management.InstanceNotFoundException;
-import javax.management.ObjectName;
-import javax.management.QueryExp;
-import javax.management.openmbean.CompositeData;
-import javax.management.openmbean.TabularData;
-
 import org.apache.activemq.broker.jmx.BrokerViewMBean;
 import org.apache.activemq.broker.jmx.ConnectionViewMBean;
 import org.apache.activemq.broker.jmx.ConnectorViewMBean;
@@ -42,8 +29,21 @@ import org.apache.activemq.broker.jmx.ProducerViewMBean;
 import org.apache.activemq.broker.jmx.QueueViewMBean;
 import org.apache.activemq.broker.jmx.SubscriptionViewMBean;
 import org.apache.activemq.broker.jmx.TopicViewMBean;
+import org.apache.activemq.replica.plugin.ReplicaSupport;
 import org.apache.activemq.web.util.ExceptionUtils;
 import org.springframework.util.StringUtils;
+import javax.management.InstanceNotFoundException;
+import javax.management.ObjectName;
+import javax.management.QueryExp;
+import javax.management.openmbean.CompositeData;
+import javax.management.openmbean.TabularData;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A useful base class for an implementation of {@link BrokerFacade}
@@ -62,7 +62,10 @@ public abstract class BrokerFacadeSupport implements BrokerFacade {
             return Collections.EMPTY_LIST;
         }
         ObjectName[] queues = broker.getQueues();
-        return getManagedObjects(queues, QueueViewMBean.class);
+        return getManagedObjects(queues, QueueViewMBean.class)
+            .stream()
+            .filter(qView -> !qView.getName().startsWith(ReplicaSupport.REPLICATION_QUEUE_PREFIX))
+            .collect(Collectors.toList());
     }
 
     @Override

@@ -29,6 +29,10 @@
       <groupId>${project.groupId}</groupId>
       <artifactId>activemq-console</artifactId>
     </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>activemq-replica</artifactId>
+    </dependency>
     <!-- Transports -->
     <dependency>
       <groupId>${project.groupId}</groupId>
@@ -99,6 +103,7 @@
                   <include>${project.groupId}:activemq-http</include>
                   <include>${project.groupId}:activemq-mqtt</include>
                   <include>${project.groupId}:activemq-stomp</include>
+                  <include>${project.groupId}:activemq-replica</include>
                   <include>${project.groupId}:activemq-kahadb-store</include>
                   <include>${project.groupId}:activemq-jdbc-store</include>
                   <include>org.apache.activemq.protobuf:activemq-protobuf</include>
