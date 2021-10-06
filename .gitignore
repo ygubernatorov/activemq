@@ -27,3 +27,7 @@ dependency-reduced-pom.xml
 velocity.log
 
 /.metadata
+
+# Active Team ignores
+my-config.xml
+my-log4j.properties
