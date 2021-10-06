@@ -385,7 +385,7 @@ public class WebClient implements HttpSessionActivationListener, HttpSessionBind
             String[] tokens = auth.split(" ");
             if (tokens.length == 2) {
                 String encoded = tokens[1].trim();
-                String credentials = new String(javax.xml.bind.DatatypeConverter.parseBase64Binary(encoded));
+                String credentials = new String(jakarta.xml.bind.DatatypeConverter.parseBase64Binary(encoded));
                 String[] creds = credentials.split(":");
                 if (creds.length == 2) {
                     client.setUsername(creds[0]);
