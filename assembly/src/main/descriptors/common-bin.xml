@@ -182,6 +182,7 @@
         <include>${pom.groupId}:activemq-jdbc-store</include>
         <include>${pom.groupId}:activemq-log4j-appender</include>
         <include>${pom.groupId}:activemq-jms-pool</include>
+        <include>${pom.groupId}:activemq-replica</include>
         <include>${pom.groupId}:activemq-pool</include>
         <include>${pom.groupId}:activemq-partition</include>
         <include>${pom.groupId}:activemq-shiro</include>

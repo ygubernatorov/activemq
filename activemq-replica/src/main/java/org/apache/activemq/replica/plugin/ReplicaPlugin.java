@@ -1,0 +1,43 @@
+package org.apache.activemq.replica.plugin;
+
+import org.apache.activemq.broker.Broker;
+import org.apache.activemq.broker.BrokerPluginSupport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.Arrays;
+
+/**
+ * A Broker plugin to replicate core messaging events from one broker to another.
+ *
+ * @org.apache.xbean.XBean element="replicaPlugin"
+ */
+public class ReplicaPlugin extends BrokerPluginSupport {
+
+    private final Logger logger = LoggerFactory.getLogger(ReplicaPlugin.class);
+
+    protected ReplicaRole role = ReplicaRole.primary;
+
+    public ReplicaPlugin() {
+        super();
+    }
+
+    @Override
+    public Broker installPlugin(final Broker broker) throws Exception {
+        logger.info("{} installed, running as {}", ReplicaPlugin.class.getName(), role);
+        return broker;
+    }
+
+    /**
+     * @org.apache.xbean.Property propertyEditor="com.sun.beans.editors.StringEditor"
+     */
+    public void setRole(String role) {
+        this.role = Arrays.stream(ReplicaRole.values())
+                        .filter(roleValue -> roleValue.name().equalsIgnoreCase(role))
+                        .findFirst()
+                        .orElseThrow(() -> new IllegalArgumentException(role + " is not a known " + ReplicaRole.class.getSimpleName()));
+    }
+
+    public ReplicaRole getRole() {
+        return role;
+    }
+}
