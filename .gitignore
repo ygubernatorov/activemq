@@ -2,6 +2,7 @@
 *.swp
 .idea
 .idea/*
+assembly/derby*
 *.iml
 *.ipr
 *.iws
