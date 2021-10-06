@@ -1,5 +1,6 @@
 package org.apache.activemq.replica.plugin;
 
+import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerPluginSupport;
 import org.slf4j.Logger;
@@ -15,7 +16,8 @@ public class ReplicaPlugin extends BrokerPluginSupport {
 
     private final Logger logger = LoggerFactory.getLogger(ReplicaPlugin.class);
 
-    protected ReplicaRole role = ReplicaRole.primary;
+    protected ReplicaRole role = ReplicaRole.source;
+    protected ActiveMQConnectionFactory otherBrokerConnectionFactory = null;
 
     public ReplicaPlugin() {
         super();
@@ -32,9 +34,18 @@ public class ReplicaPlugin extends BrokerPluginSupport {
      */
     public void setRole(String role) {
         this.role = Arrays.stream(ReplicaRole.values())
-                        .filter(roleValue -> roleValue.name().equalsIgnoreCase(role))
-                        .findFirst()
-                        .orElseThrow(() -> new IllegalArgumentException(role + " is not a known " + ReplicaRole.class.getSimpleName()));
+            .filter(roleValue -> roleValue.name().equalsIgnoreCase(role))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException(role + " is not a known " + ReplicaRole.class.getSimpleName()));
+    }
+
+    /**
+     * @org.apache.xbean.Property propertyEditor="com.sun.beans.editors.StringEditor"
+     */
+    public void setOtherBrokerUri(String uri) {
+        var connectionFactory = new ActiveMQConnectionFactory();
+        connectionFactory.setBrokerURL(uri);
+        this.otherBrokerConnectionFactory = connectionFactory;
     }
 
     public ReplicaRole getRole() {
