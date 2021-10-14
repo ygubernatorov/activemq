@@ -27,14 +27,19 @@ public class ReplicaEvent {
         return this;
     }
 
-    ReplicaEvent acceptDataWrite(WriteConsumer writeConsumer) throws IOException {
-        try (final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-             final ObjectOutput outputStream = new ObjectOutputStream(buffer)) {
-            writeConsumer.writeTo(outputStream);
-            this.eventData = buffer.toByteArray();
-        }
-        return this;
-    }
+//    ReplicaEvent setEventData(final ByteSequence eventData) {
+//        this.eventData = requireNonNull(eventData).data;
+//        return this;
+//    }
+
+//    ReplicaEvent acceptDataWrite(WriteConsumer writeConsumer) throws IOException {
+//        try (final ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+//             final ObjectOutput outputStream = new ObjectOutputStream(buffer)) {
+//            writeConsumer.writeTo(outputStream);
+//            this.eventData = buffer.toByteArray();
+//        }
+//        return this;
+//    }
 
     ByteSequence getEventData() {
         return new ByteSequence(eventData);

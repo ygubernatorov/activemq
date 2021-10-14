@@ -26,7 +26,9 @@ public class ReplicaPlugin extends BrokerPluginSupport {
     @Override
     public Broker installPlugin(final Broker broker) throws Exception {
         logger.info("{} installed, running as {}", ReplicaPlugin.class.getName(), role);
-        return broker;
+        return role == ReplicaRole.replica
+            ? new ReplicaBroker(broker, otherBrokerConnectionFactory)
+            : new ReplicaSourceBroker(broker);
     }
 
     /**

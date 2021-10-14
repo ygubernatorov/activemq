@@ -33,11 +33,7 @@ import org.apache.activemq.command.Response;
 import org.apache.activemq.command.TransactionId;
 import org.apache.activemq.filter.DestinationMap;
 import org.apache.activemq.filter.DestinationMapEntry;
-import org.apache.activemq.openwire.OpenWireFormat;
 import org.apache.activemq.state.ProducerState;
-import org.apache.activemq.util.ByteSequence;
-import org.apache.activemq.util.ByteSequenceData;
-import org.apache.activemq.util.IOExceptionSupport;
 import org.apache.activemq.util.IdGenerator;
 import org.apache.activemq.util.LongSequenceGenerator;
 import org.slf4j.Logger;
@@ -62,6 +58,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
     private final IdGenerator idGenerator = new IdGenerator();
     private final ProducerId replicationProducerId = new ProducerId();
     private final LongSequenceGenerator eventMessageIdGenerator = new LongSequenceGenerator();
+    private final ReplicaEventSerializer eventSerializer = new ReplicaEventSerializer();
     // memoized
     private ActiveMQQueue replicationQueue = null;
 
@@ -174,15 +171,6 @@ public class ReplicaSourceBroker extends BrokerFilter {
         );
     }
 
-    private byte[] serializeMessageData(final Message message) throws IOException {
-        try {
-            ByteSequence packet = new OpenWireFormat().marshal(message);
-            return ByteSequenceData.toByteArray(packet);
-        } catch (IOException e) {
-            throw IOExceptionSupport.create("Failed to serialize message: " + message.getMessageId() + " in container: " + e, e);
-        }
-    }
-
     private void replicateSend(final ProducerBrokerExchange context, final Message message,
                                final ActiveMQDestination destination) {
         try {
@@ -190,7 +178,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 context.getConnectionContext(),
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_SEND)
-                    .setEventData(serializeMessageData(message)) // TODO: define format
+                    .setEventData(eventSerializer.serializeMessageData(message))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate message {} for destination {}", message.getMessageId(), destination.getPhysicalName());
@@ -203,7 +191,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_ACK)
-                    .setEventData(ack.toString().getBytes()) // TODO: define format
+                    .setEventData(eventSerializer.serializeReplicationData(ack))
             );
         } catch (Exception e) {
             logger.error(
@@ -221,7 +209,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
             context,
             new ReplicaEvent()
                 .setEventType(ReplicaEventType.DESTINATION_UPSERT)
-                .acceptDataWrite(destination::writeExternal) // TODO: define serialization format
+                .setEventData(eventSerializer.serializeReplicationData(destination))
         );
         if (destinationsToReplicate.chooseValue(destination) == null) {
             destinationsToReplicate.put(destination, IS_REPLICATED);
@@ -237,7 +225,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 getAdminConnectionContext(),
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.DESTINATION_DELETE)
-                    .acceptDataWrite(destination::writeExternal) // TODO: define serialization format
+                    .setEventData(eventSerializer.serializeReplicationData(destination))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate remove of destination {}", destination.getPhysicalName(), e);
@@ -254,7 +242,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_CONSUMED)
-                    .setEventData(new OpenWireFormat().marshal(reference).data) // TODO: define serialization format
+                    .setEventData(eventSerializer.serializeReplicationData(reference))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate consumption {}", reference.getMessageId(), e);
@@ -271,7 +259,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_DISCARDED)
-                    .setEventData(new OpenWireFormat().marshal(reference).data) // TODO: define serialization format
+                    .setEventData(eventSerializer.serializeReplicationData(reference))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate discard of {}", reference.getMessageId(), e);
@@ -288,7 +276,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_EXPIRED)
-                    .setEventData(new OpenWireFormat().marshal(reference).data) // TODO: define serialization format
+                    .setEventData(eventSerializer.serializeReplicationData(reference))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate discard of {}", reference.getMessageId(), e);
@@ -334,6 +322,9 @@ public class ReplicaSourceBroker extends BrokerFilter {
     @Override
     public void acknowledge(final ConsumerBrokerExchange consumerExchange, final MessageAck ack) throws Exception {
         super.acknowledge(consumerExchange, ack);
+        if (!isReplicatedDestination(ack.getDestination())) {
+            return;
+        }
         replicateAck(consumerExchange.getConnectionContext(), consumerExchange.getSubscription(), ack); // TODO: only replicate acks for dests we care about
     }
 
