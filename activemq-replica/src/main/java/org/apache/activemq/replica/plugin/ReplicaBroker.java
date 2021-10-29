@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.jms.JMSException;
 import java.text.MessageFormat;
-import java.util.Optional;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +37,7 @@ public class ReplicaBroker extends BrokerFilter {
     @Override
     public void start() throws Exception {
         super.start();
-        brokerConnectionPoller.scheduleAtFixedRate(this::beginReplicationIdempotent, 20, 5, TimeUnit.SECONDS);
+        brokerConnectionPoller.scheduleAtFixedRate(this::beginReplicationIdempotent, 5, 5, TimeUnit.SECONDS);
     }
 
     @Override
@@ -64,13 +63,13 @@ public class ReplicaBroker extends BrokerFilter {
             logger.debug("Establishing inter-broker replication connection");
             establishConnectionSession();
         }
-        try {
-            if (eventConsumer.get() == null) {
+        if (eventConsumer.get() == null) {
+            try {
                 logger.debug("Creating replica event consumer");
                 consumeReplicationEvents();
+            } catch (Exception e) {
+                logger.error("Could not establish replication consumer", e);
             }
-        } catch (Exception e) {
-            logger.error("Could not establish replication consumer", e);
         }
     }
 
@@ -80,6 +79,7 @@ public class ReplicaBroker extends BrokerFilter {
             try {
                 establishConnection();
                 var session = (ActiveMQSession) connection.get().createSession(false, ActiveMQSession.INDIVIDUAL_ACKNOWLEDGE);
+                session.setAsyncDispatch(false); // force the primary broker to block if we are slow
                 connectionSession.set(session);
             } catch (RuntimeException | JMSException e) {
                 logger.warn("Failed to establish connection to replica", e);
@@ -125,7 +125,7 @@ public class ReplicaBroker extends BrokerFilter {
             ));
         logger.debug("Plugin will mirror events from queue {}", replicationSourceQueue.getPhysicalName());
         eventConsumer.set((ActiveMQMessageConsumer)
-            connectionSession.get().createConsumer(replicationSourceQueue, new ReplicaBrokerEventListener())
+            connectionSession.get().createConsumer(replicationSourceQueue, new ReplicaBrokerEventListener(getNext()))
         );
     }
 

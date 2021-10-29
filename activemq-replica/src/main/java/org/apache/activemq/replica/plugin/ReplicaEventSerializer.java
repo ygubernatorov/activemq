@@ -10,7 +10,7 @@ import java.io.IOException;
 
 public class ReplicaEventSerializer {
 
-    private WireFormat wireFormat = new OpenWireFormat();
+    private final WireFormat wireFormat = new OpenWireFormat();
 
     byte[] serializeReplicationData(final Object object) throws IOException {
         try {
@@ -30,8 +30,7 @@ public class ReplicaEventSerializer {
         }
     }
 
-    String deserializeMessageData(final ByteSequence sequence) throws IOException {
-        String result = wireFormat.unmarshal(sequence).toString();
-        return result;
+    Object deserializeMessageData(final ByteSequence sequence) throws IOException {
+        return wireFormat.unmarshal(sequence);
     }
 }

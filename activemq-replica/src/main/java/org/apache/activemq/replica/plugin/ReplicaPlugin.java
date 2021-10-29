@@ -46,7 +46,11 @@ public class ReplicaPlugin extends BrokerPluginSupport {
      */
     public void setOtherBrokerUri(String uri) {
         var connectionFactory = new ActiveMQConnectionFactory();
-        connectionFactory.setBrokerURL(uri);
+        connectionFactory.setBrokerURL(
+            uri.toLowerCase().startsWith("failover:(")
+                ? uri
+                : "failover:("+uri+")"
+        );
         this.otherBrokerConnectionFactory = connectionFactory;
     }
 

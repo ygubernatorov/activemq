@@ -16,7 +16,6 @@ import org.apache.activemq.broker.region.Subscription;
 import org.apache.activemq.broker.region.virtual.VirtualDestination;
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQMessage;
-import org.apache.activemq.command.ActiveMQQueue;
 import org.apache.activemq.command.BrokerInfo;
 import org.apache.activemq.command.ConsumerInfo;
 import org.apache.activemq.command.DestinationInfo;
@@ -27,20 +26,19 @@ import org.apache.activemq.command.MessageDispatchNotification;
 import org.apache.activemq.command.MessageId;
 import org.apache.activemq.command.MessagePull;
 import org.apache.activemq.command.ProducerId;
-import org.apache.activemq.command.ProducerInfo;
 import org.apache.activemq.command.RemoveSubscriptionInfo;
 import org.apache.activemq.command.Response;
+import org.apache.activemq.command.SubscriptionInfo;
 import org.apache.activemq.command.TransactionId;
 import org.apache.activemq.filter.DestinationMap;
 import org.apache.activemq.filter.DestinationMapEntry;
-import org.apache.activemq.state.ProducerState;
 import org.apache.activemq.util.IdGenerator;
 import org.apache.activemq.util.LongSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.text.MessageFormat;
 import java.util.Arrays;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
@@ -59,43 +57,23 @@ public class ReplicaSourceBroker extends BrokerFilter {
     private final ProducerId replicationProducerId = new ProducerId();
     private final LongSequenceGenerator eventMessageIdGenerator = new LongSequenceGenerator();
     private final ReplicaEventSerializer eventSerializer = new ReplicaEventSerializer();
-    // memoized
-    private ActiveMQQueue replicationQueue = null;
+    private final ReplicaReplicationQueueSupplier queueProvider;
 
     public ReplicaSourceBroker(final Broker next) {
         super(next);
         replicationProducerId.setConnectionId(idGenerator.generateId());
+        queueProvider = new ReplicaReplicationQueueSupplier(next);
     }
 
     @Override
     public void start() throws Exception {
         super.start();
-        ensureReplicationQueueExists();
+        queueProvider.initialize();
+        logger.info("Replica plugin initialized with queue {}", queueProvider.get());
         ensureDestinationsAreReplicated();
         addReplicationInterceptor();
     }
 
-    private void ensureReplicationQueueExists() throws Exception {
-        Optional<ActiveMQDestination> existingReplicationQueue = getDurableDestinations()
-            .stream()
-            .filter(ActiveMQDestination::isQueue)
-            .filter(d -> d.getPhysicalName().startsWith(ReplicaSupport.REPLICATION_QUEUE_PREFIX))
-            .findFirst();
-        if (existingReplicationQueue.isPresent()) {
-            this.replicationQueue = new ActiveMQQueue(existingReplicationQueue.get().getPhysicalName());
-            logger.debug("Plugin will mirror with existing queue {}", this.replicationQueue.getPhysicalName());
-        } else {
-            String mirrorQueueName = new IdGenerator(ReplicaSupport.REPLICATION_QUEUE_PREFIX).generateId();
-            ActiveMQQueue newReplicationQueue = new ActiveMQQueue(mirrorQueueName);
-            getBrokerService().getBroker().addDestination(
-                getAdminConnectionContext(),
-                newReplicationQueue,
-                false
-            );
-            logger.debug("Created replica plugin queue {}", newReplicationQueue.getPhysicalName());
-            this.replicationQueue = newReplicationQueue;
-        }
-    }
 
     private void ensureDestinationsAreReplicated() throws Exception {
         for (ActiveMQDestination d : getDurableDestinations()) { // TODO: support non-durable?
@@ -105,17 +83,15 @@ public class ReplicaSourceBroker extends BrokerFilter {
         }
     }
 
-    private boolean shouldReplicateDestination(final ActiveMQDestination destination) {
-        return !destination.getPhysicalName().startsWith(ReplicaSupport.REPLICATION_QUEUE_PREFIX) && !AdvisorySupport.isAdvisoryTopic(destination);
-    }
-
     private boolean shouldReplicateDestination(final ActiveMQDestination destination, ReplicationLogging replicationLogging) {
-        boolean isNotReplicationQueue = !destination.getPhysicalName().startsWith(ReplicaSupport.REPLICATION_QUEUE_PREFIX);
-        boolean isNotAdvisoryDestination = !destination.getPhysicalName().startsWith(AdvisorySupport.ADVISORY_TOPIC_PREFIX);
-        boolean shouldReplicate = isNotReplicationQueue && isNotAdvisoryDestination;
+        boolean isReplicationQueue = destination.getPhysicalName().startsWith(ReplicaSupport.REPLICATION_QUEUE_PREFIX);
+        boolean isAdvisoryDestination = destination.getPhysicalName().startsWith(AdvisorySupport.ADVISORY_TOPIC_PREFIX);
+        boolean shouldReplicate = !isReplicationQueue && !isAdvisoryDestination;
         if (replicationLogging == ReplicationLogging.ShowReason) {
-            logger.debug("Will {}replicate destination {} because it is {}a replication queue and it is {}an advisory destination",
-                shouldReplicate ? "" : "not ", destination.getPhysicalName(), isNotReplicationQueue ? "not ": "", isNotAdvisoryDestination ? "not " : "");
+            String reason = shouldReplicate ? "" : " because ";
+            if (isReplicationQueue) reason += "it is a replication queue";
+            if (isAdvisoryDestination) reason += "it is an advisory destination";
+            logger.debug("Will {}replicate destination {}{}", shouldReplicate ? "": "not ", destination, reason);
         }
         return shouldReplicate;
     }
@@ -132,33 +108,26 @@ public class ReplicaSourceBroker extends BrokerFilter {
 
     private void enqueueReplicaEvent(ConnectionContext context, ReplicaEvent event) throws Exception {
         logger.debug("Replicating {} event", event.getEventType());
-        logger.debug("data:\n{}", new String(event.getEventData().data)); // FIXME: remove
+        logger.trace("data:\n{}", new Object() {
+            @Override
+            public String toString() {
+                try {
+                    return eventSerializer.deserializeMessageData(event.getEventData()).toString();
+                } catch (IOException e) {
+                    return "<some event data>";
+                }
+            }
+        }); // FIXME: remove
         ActiveMQMessage eventMessage = new ActiveMQMessage();
         eventMessage.setPersistent(true);
         eventMessage.setType("ReplicaEvent");
+        eventMessage.setStringProperty(ReplicaEventType.EVENT_TYPE_PROPERTY, event.getEventType().name());
         eventMessage.setMessageId(new MessageId(replicationProducerId, eventMessageIdGenerator.getNextSequenceId()));
-        eventMessage.setDestination(replicationQueue);
+        eventMessage.setDestination(queueProvider.get());
         eventMessage.setProducerId(replicationProducerId);
         eventMessage.setResponseRequired(false);
-
         eventMessage.setContent(event.getEventData());
-
-        final ProducerBrokerExchange producerExchange = new ProducerBrokerExchange();
-        producerExchange.setConnectionContext(context);
-        producerExchange.setMutable(true);
-        producerExchange.setProducerState(new ProducerState(new ProducerInfo()));
-
-        sendIgnoringFlowControl(context, eventMessage, producerExchange);
-    }
-
-    private void sendIgnoringFlowControl(ConnectionContext context, ActiveMQMessage eventMessage, ProducerBrokerExchange producerExchange) throws Exception {
-        boolean originalFlowControl = context.isProducerFlowControl();
-        try {
-            context.setProducerFlowControl(false);
-            next.send(producerExchange, eventMessage);
-        } finally {
-            context.setProducerFlowControl(originalFlowControl);
-        }
+        new ReplicaInternalMessageProducer(next, context).produceToReplicaQueue(eventMessage);
     }
 
     private void addReplicationInterceptor() {
@@ -322,10 +291,10 @@ public class ReplicaSourceBroker extends BrokerFilter {
     @Override
     public void acknowledge(final ConsumerBrokerExchange consumerExchange, final MessageAck ack) throws Exception {
         super.acknowledge(consumerExchange, ack);
-        if (!isReplicatedDestination(ack.getDestination())) {
+        if (consumerExchange.getSubscription().isBrowser() || !isReplicatedDestination(ack.getDestination())) {
             return;
         }
-        replicateAck(consumerExchange.getConnectionContext(), consumerExchange.getSubscription(), ack); // TODO: only replicate acks for dests we care about
+        replicateAck(consumerExchange.getConnectionContext(), consumerExchange.getSubscription(), ack);
     }
 
     @Override
@@ -339,8 +308,15 @@ public class ReplicaSourceBroker extends BrokerFilter {
 //    }
 
     @Override
-    public Subscription addConsumer(final ConnectionContext context, final ConsumerInfo info) throws Exception {
-        return super.addConsumer(context, info); // TODO: durable subscribers?
+    public Subscription addConsumer(final ConnectionContext context, final ConsumerInfo consumerInfo) throws Exception {
+        var subscription = super.addConsumer(context, consumerInfo);
+        var subscriptionInfo = new SubscriptionInfo(
+            subscription.getConsumerInfo().getClientId(),
+            subscription.getConsumerInfo().getSubscriptionName()
+        );
+        subscriptionInfo.setSelector(subscription.getSelector());
+        subscriptionInfo.setDestination(subscriptionInfo.getDestination()); // TODO: durable subscribers?
+        return subscription;
     }
 
 //    @Override
