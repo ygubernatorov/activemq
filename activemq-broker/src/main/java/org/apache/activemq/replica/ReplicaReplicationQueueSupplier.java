@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.command.ActiveMQDestination;

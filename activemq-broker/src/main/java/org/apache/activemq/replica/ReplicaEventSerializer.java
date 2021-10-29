@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.command.Message;
 import org.apache.activemq.openwire.OpenWireFormat;

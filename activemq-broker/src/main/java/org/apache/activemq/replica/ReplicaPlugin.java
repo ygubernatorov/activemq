@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.ActiveMQConnectionFactory;
 import org.apache.activemq.broker.Broker;
@@ -45,7 +45,7 @@ public class ReplicaPlugin extends BrokerPluginSupport {
      * @org.apache.xbean.Property propertyEditor="com.sun.beans.editors.StringEditor"
      */
     public void setOtherBrokerUri(String uri) {
-        var connectionFactory = new ActiveMQConnectionFactory();
+        ActiveMQConnectionFactory connectionFactory = new ActiveMQConnectionFactory();
         connectionFactory.setBrokerURL(
             uri.toLowerCase().startsWith("failover:(")
                 ? uri

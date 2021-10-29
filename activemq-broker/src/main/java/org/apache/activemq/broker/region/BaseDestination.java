@@ -18,6 +18,7 @@ package org.apache.activemq.broker.region;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.jms.ResourceAllocationException;
@@ -35,7 +36,8 @@ import org.apache.activemq.command.Message;
 import org.apache.activemq.command.MessageAck;
 import org.apache.activemq.command.MessageDispatchNotification;
 import org.apache.activemq.command.ProducerInfo;
-import org.apache.activemq.filter.NonCachedMessageEvaluationContext;
+import org.apache.activemq.replica.ReplicaBroker;
+import org.apache.activemq.replica.ReplicaSourceBroker;
 import org.apache.activemq.security.SecurityContext;
 import org.apache.activemq.state.ProducerState;
 import org.apache.activemq.store.MessageStore;
@@ -45,6 +47,8 @@ import org.apache.activemq.usage.SystemUsage;
 import org.apache.activemq.usage.TempUsage;
 import org.apache.activemq.usage.Usage;
 import org.slf4j.Logger;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  *
@@ -522,6 +526,9 @@ public abstract class BaseDestination implements Destination {
     public void messageConsumed(ConnectionContext context, MessageReference messageReference) {
         if (advisoryForConsumed) {
             broker.messageConsumed(context, messageReference);
+        } else {
+            Optional.ofNullable(broker.getAdaptor(ReplicaSourceBroker.class))
+                .ifPresent(replicaBroker -> replicaBroker.messageConsumed(context, messageReference));
         }
     }
 
@@ -914,4 +921,5 @@ public abstract class BaseDestination implements Destination {
     public SystemUsage getSystemUsage() {
         return systemUsage;
     }
+
 }

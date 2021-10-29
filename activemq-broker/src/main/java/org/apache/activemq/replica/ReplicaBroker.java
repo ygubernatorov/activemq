@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.ActiveMQConnection;
 import org.apache.activemq.ActiveMQConnectionFactory;
@@ -6,6 +6,7 @@ import org.apache.activemq.ActiveMQMessageConsumer;
 import org.apache.activemq.ActiveMQSession;
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerFilter;
+import org.apache.activemq.command.ActiveMQQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.jms.JMSException;
@@ -42,9 +43,9 @@ public class ReplicaBroker extends BrokerFilter {
 
     @Override
     public void stop() throws Exception {
-        var consumer = eventConsumer.get();
-        var session = connectionSession.get();
-        var brokerConnection = connection.get();
+        ActiveMQMessageConsumer consumer = eventConsumer.get();
+        ActiveMQSession session = connectionSession.get();
+        ActiveMQConnection brokerConnection = connection.get();
         if (consumer != null) {
             consumer.stop();
             consumer.close();
@@ -78,7 +79,7 @@ public class ReplicaBroker extends BrokerFilter {
             logger.debug("Trying to connect to replica source");
             try {
                 establishConnection();
-                var session = (ActiveMQSession) connection.get().createSession(false, ActiveMQSession.INDIVIDUAL_ACKNOWLEDGE);
+                ActiveMQSession session = (ActiveMQSession) connection.get().createSession(false, ActiveMQSession.INDIVIDUAL_ACKNOWLEDGE);
                 session.setAsyncDispatch(false); // force the primary broker to block if we are slow
                 connectionSession.set(session);
             } catch (RuntimeException | JMSException e) {
@@ -104,7 +105,7 @@ public class ReplicaBroker extends BrokerFilter {
 
     private void establishConnection() throws JMSException {
         logger.trace("Replica connection URL {}", replicaSourceConnectionFactory.getBrokerURL());
-        var newConnection = (ActiveMQConnection) replicaSourceConnectionFactory.createConnection();
+        ActiveMQConnection newConnection = (ActiveMQConnection) replicaSourceConnectionFactory.createConnection();
         newConnection.start();
         connection.set(newConnection);
         logger.debug("Established connection to replica source: {}", replicaSourceConnectionFactory.getBrokerURL());
@@ -114,7 +115,7 @@ public class ReplicaBroker extends BrokerFilter {
         if (connectionUnusable() || sessionUnusable()) {
             return;
         }
-        var replicationSourceQueue = connection.get()
+        ActiveMQQueue replicationSourceQueue = connection.get()
             .getDestinationSource()
             .getQueues()
             .stream()
@@ -135,7 +136,7 @@ public class ReplicaBroker extends BrokerFilter {
             logger.trace("Will not consume events because we are still connecting");
             return true;
         }
-        var conn = connection.get();
+        ActiveMQConnection conn = connection.get();
         if (conn == null) {
             logger.trace("Will not consume events because we don't have a connection");
             return true;
@@ -148,7 +149,7 @@ public class ReplicaBroker extends BrokerFilter {
     }
 
     private boolean sessionUnusable() {
-        var session = connectionSession.get();
+        ActiveMQSession session = connectionSession.get();
         if (session == null) {
             logger.trace("Will not consume events because we don't have a session");
             return true;

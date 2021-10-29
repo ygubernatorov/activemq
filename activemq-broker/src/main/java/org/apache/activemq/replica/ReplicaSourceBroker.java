@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.advisory.AdvisorySupport;
 import org.apache.activemq.broker.Broker;
@@ -37,7 +37,6 @@ import org.apache.activemq.util.LongSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
-import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Stream;
@@ -48,7 +47,7 @@ public class ReplicaSourceBroker extends BrokerFilter {
         ShowReason, Disable
     }
 
-    private static final DestinationMapEntry<?> IS_REPLICATED = new DestinationMapEntry<>() {}; // used in destination map to indicate mirrored status
+    private static final DestinationMapEntry<Boolean> IS_REPLICATED = new DestinationMapEntry<Boolean>() {}; // used in destination map to indicate mirrored status
 
     final DestinationMap destinationsToReplicate = new DestinationMap();
 
@@ -309,8 +308,8 @@ public class ReplicaSourceBroker extends BrokerFilter {
 
     @Override
     public Subscription addConsumer(final ConnectionContext context, final ConsumerInfo consumerInfo) throws Exception {
-        var subscription = super.addConsumer(context, consumerInfo);
-        var subscriptionInfo = new SubscriptionInfo(
+        Subscription subscription = super.addConsumer(context, consumerInfo);
+        SubscriptionInfo subscriptionInfo = new SubscriptionInfo(
             subscription.getConsumerInfo().getClientId(),
             subscription.getConsumerInfo().getSubscriptionName()
         );

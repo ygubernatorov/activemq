@@ -1,8 +1,9 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.ConnectionContext;
 import org.apache.activemq.broker.region.AbstractRegion;
+import org.apache.activemq.broker.region.Region;
 import org.apache.activemq.broker.region.RegionBroker;
 import org.apache.activemq.broker.region.Subscription;
 import org.apache.activemq.command.ActiveMQDestination;
@@ -66,8 +67,8 @@ public class ReplicaBrokerSubscriptionHandler {
             logger.trace("Consumer {} already exists for destination {}", consumerId, destination);
             return;
         }
-        var regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
-        var region = regionBroker.getRegion(destination);
+        RegionBroker regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
+        Region region = regionBroker.getRegion(destination);
         Subscription subscription = null;
         if (region instanceof AbstractRegion) {
             subscription = ((AbstractRegion) region).getSubscriptions().get(consumerId);
@@ -77,7 +78,7 @@ public class ReplicaBrokerSubscriptionHandler {
             }
         }
         if (knownConsumers.get(consumerId) == null) {
-            var consumerInfo = new ConsumerInfo(consumerId);
+            ConsumerInfo consumerInfo = new ConsumerInfo(consumerId);
             consumerInfo.setDestination(destination);
             consumerInfo.setPrefetchSize(0);
             logger.debug("Creating consumer {} on destination {}", consumerId, destination);

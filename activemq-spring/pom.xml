@@ -117,10 +117,6 @@
       <artifactId>osgi.cmpn</artifactId>
       <scope>provided</scope>
     </dependency>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>activemq-replica</artifactId>
-    </dependency>
 
     
     <dependency>
@@ -219,7 +215,6 @@
                 <include>${basedir}/../activemq-broker/src/main/java</include>
                 <include>${basedir}/../activemq-jdbc-store/src/main/java</include>
                 <include>${basedir}/../activemq-kahadb-store/src/main/java</include>
-                <include>${basedir}/../activemq-replica/src/main/java</include>
                 <include>${basedir}/../activemq-mqtt/src/main/java</include>
                 <include>${basedir}/../activemq-stomp/src/main/java</include>
                 <include>${basedir}/../activemq-partition/src/main/java</include>

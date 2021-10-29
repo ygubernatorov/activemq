@@ -1,4 +1,4 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 public class ActiveMQReplicaException extends RuntimeException {
 

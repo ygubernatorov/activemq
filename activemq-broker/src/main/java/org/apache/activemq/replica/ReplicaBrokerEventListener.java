@@ -1,12 +1,15 @@
-package org.apache.activemq.replica.plugin;
+package org.apache.activemq.replica;
 
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.ConsumerBrokerExchange;
+import org.apache.activemq.broker.region.Destination;
 import org.apache.activemq.broker.region.MessageReference;
+import org.apache.activemq.broker.region.Region;
 import org.apache.activemq.broker.region.RegionBroker;
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQMessage;
 import org.apache.activemq.command.MessageAck;
+import org.apache.activemq.util.ByteSequence;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import javax.jms.JMSException;
@@ -33,11 +36,11 @@ public class ReplicaBrokerEventListener implements MessageListener {
     @Override
     public void onMessage(final Message jmsMessage) {
         logger.trace("Received replication message from replica source");
-        var message = (ActiveMQMessage) jmsMessage;
-        var messageContent = message.getContent();
+        ActiveMQMessage message = (ActiveMQMessage) jmsMessage;
+        ByteSequence messageContent = message.getContent();
 
         try {
-            var deserializedData = eventSerializer.deserializeMessageData(messageContent);
+            Object deserializedData = eventSerializer.deserializeMessageData(messageContent);
             logger.trace(deserializedData.toString());
             getEventType(message).ifPresent(eventType -> {
                 switch (eventType) {
@@ -81,16 +84,16 @@ public class ReplicaBrokerEventListener implements MessageListener {
 
     private void consumeAck(final MessageAck ack) {
         try {
-            var consumerBrokerExchange = new ConsumerBrokerExchange();
-            var destination = broker.getDestinations(ack.getDestination()).stream()
+            ConsumerBrokerExchange consumerBrokerExchange = new ConsumerBrokerExchange();
+            Destination destination = broker.getDestinations(ack.getDestination()).stream()
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Destination not found that matches: " + ack.getDestination().getQualifiedName()));
             consumerBrokerExchange.setRegion(broker);
             consumerBrokerExchange.setRegionDestination(destination);
             consumerBrokerExchange.setConnectionContext(broker.getAdminConnectionContext());
             subscriptionHandler.createSubscriptionIfAbsent(ack.getConsumerId(), ack.getDestination());
-            var regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
-            var region = regionBroker.getRegion(destination.getActiveMQDestination());
+            RegionBroker regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
+            Region region = regionBroker.getRegion(destination.getActiveMQDestination());
             region.acknowledge(consumerBrokerExchange, ack);
         } catch (Exception e) {
             logger.error("Failed to process ack with last message id: {}", ack.getLastMessageId(), e);
@@ -99,7 +102,7 @@ public class ReplicaBrokerEventListener implements MessageListener {
 
     private Optional<ReplicaEventType> getEventType(final ActiveMQMessage message) {
         try {
-            var eventTypeProperty = message.getStringProperty(ReplicaEventType.EVENT_TYPE_PROPERTY);
+            String eventTypeProperty = message.getStringProperty(ReplicaEventType.EVENT_TYPE_PROPERTY);
             return Arrays.stream(ReplicaEventType.values())
                 .filter(t -> t.name().equals(eventTypeProperty))
                 .findFirst();
@@ -116,7 +119,7 @@ public class ReplicaBrokerEventListener implements MessageListener {
 
     private void upsertDestination(final ActiveMQDestination destination) {
         try {
-            var isExistingDestination = Arrays.stream(broker.getDestinations())
+            boolean isExistingDestination = Arrays.stream(broker.getDestinations())
                 .anyMatch(d -> d.getQualifiedName().equals(destination.getQualifiedName()));
             if (isExistingDestination) {
                 logger.debug("Destination [{}] already exists, no action to take", destination);
@@ -134,7 +137,7 @@ public class ReplicaBrokerEventListener implements MessageListener {
 
     private void deleteDestination(final ActiveMQDestination destination) {
         try {
-            var isNonExtantDestination = Arrays.stream(broker.getDestinations())
+            boolean isNonExtantDestination = Arrays.stream(broker.getDestinations())
                 .noneMatch(d -> d.getQualifiedName().equals(destination.getQualifiedName()));
             if (isNonExtantDestination) {
                 logger.debug("Destination [{}] does not exist, no action to take", destination);

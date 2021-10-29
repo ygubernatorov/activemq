@@ -29,7 +29,7 @@ import org.apache.activemq.broker.jmx.ProducerViewMBean;
 import org.apache.activemq.broker.jmx.QueueViewMBean;
 import org.apache.activemq.broker.jmx.SubscriptionViewMBean;
 import org.apache.activemq.broker.jmx.TopicViewMBean;
-import org.apache.activemq.replica.plugin.ReplicaSupport;
+import org.apache.activemq.replica.ReplicaSupport;
 import org.apache.activemq.web.util.ExceptionUtils;
 import org.springframework.util.StringUtils;
 import javax.management.InstanceNotFoundException;

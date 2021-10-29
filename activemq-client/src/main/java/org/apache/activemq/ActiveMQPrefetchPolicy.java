@@ -40,7 +40,7 @@ public class ActiveMQPrefetchPolicy extends Object implements Serializable {
     private static final Logger LOG = LoggerFactory.getLogger(ActiveMQPrefetchPolicy.class);
 
     private int queuePrefetch;
-    private int queueBrowserPrefetch;
+    private int queueBrowserPrefetch; // note
     private int topicPrefetch;
     private int durableTopicPrefetch;
     private int optimizeDurableTopicPrefetch;
