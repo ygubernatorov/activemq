@@ -5,6 +5,11 @@ command=${1:-restart}
 
 set -e
 
+logs() {
+  cd assembly/target/
+  tail -f ./broker1/data/activemq.log ./broker2/data/activemq.log
+}
+
 copy_and_start() {
   rm -rf apache-activemq-${VERSION}/bin
 
@@ -22,10 +27,15 @@ copy_and_start() {
   cp ../../my-console2.xml ./broker2/conf/jetty.xml
   cp ../../my-log4j.properties ./broker2/conf/log4j.properties
 
+  sed -i.bak 's/#ACTIVEMQ_DEBUG_OPTS/ACTIVEMQ_DEBUG_OPTS/g' ./broker1/bin/env
+  sed -i.bak 's/#ACTIVEMQ_DEBUG_OPTS/ACTIVEMQ_DEBUG_OPTS/g' ./broker2/bin/env
+  sed -i.bak 's/address=5005/address=5006/g' ./broker2/bin/env
+
   ./broker1/bin/activemq start
   ./broker2/bin/activemq start
 
-  tail -f ./broker1/data/activemq.log ./broker2/data/activemq.log
+  cd ../../
+  logs
 }
 
 stop() {
@@ -37,7 +47,7 @@ stop() {
 }
 
 kill_mq() {
-  kill $(ps aux | grep activemq | awk '{print $2}')
+  pkill -f 'activemq'
 }
 
 case "$command" in
@@ -52,6 +62,9 @@ case "$command" in
     ;;
   kill)
     kill_mq
+    ;;
+  logs)
+    logs
     ;;
   *)
     echo "Unknown command $command"
