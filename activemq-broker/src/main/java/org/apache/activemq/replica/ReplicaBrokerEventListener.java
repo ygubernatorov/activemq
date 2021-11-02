@@ -2,12 +2,19 @@ package org.apache.activemq.replica;
 
 import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.ConsumerBrokerExchange;
+import org.apache.activemq.broker.region.AbstractRegion;
 import org.apache.activemq.broker.region.Destination;
+import org.apache.activemq.broker.region.DurableTopicSubscription;
+import org.apache.activemq.broker.region.IndirectMessageReference;
 import org.apache.activemq.broker.region.MessageReference;
+import org.apache.activemq.broker.region.Queue;
 import org.apache.activemq.broker.region.Region;
 import org.apache.activemq.broker.region.RegionBroker;
+import org.apache.activemq.broker.region.Subscription;
+import org.apache.activemq.broker.region.Topic;
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQMessage;
+import org.apache.activemq.command.ConsumerId;
 import org.apache.activemq.command.MessageAck;
 import org.apache.activemq.util.ByteSequence;
 import org.slf4j.Logger;
@@ -52,9 +59,11 @@ public class ReplicaBrokerEventListener implements MessageListener {
                         logger.trace("Processing replicated message ack");
                         consumeAck((MessageAck) deserializedData);
                         return;
-                    case MESSAGE_CONSUMED:
-                        logger.trace("Processing replicated consume");
-                        consumeMessage((MessageReference) deserializedData);
+                    case MESSAGE_CONSUMED: // TODO: make sure advisory correctly fired
+                    case MESSAGE_EXPIRED:
+                    case MESSAGE_DISCARDED:
+                        logger.trace("Processing replicated message removal due to {}", eventType);
+                        removeMessage((MessageAck) deserializedData);
                         return;
                     case DESTINATION_UPSERT:
                         logger.trace("Processing replicated destination");
@@ -71,6 +80,19 @@ public class ReplicaBrokerEventListener implements MessageListener {
         } catch (IOException | ClassCastException e) {
             logger.error("Failed to deserialize replication message (id={}), {}", message.getMessageId(), new String(messageContent.data));
             logger.debug("Deserialization error for replication message (id={})", message.getMessageId(), e);
+        }
+    }
+
+    private Optional<ReplicaEventType> getEventType(final ActiveMQMessage message) {
+        try {
+            String eventTypeProperty = message.getStringProperty(ReplicaEventType.EVENT_TYPE_PROPERTY);
+            return Arrays.stream(ReplicaEventType.values())
+                .filter(t -> t.name().equals(eventTypeProperty))
+                .findFirst();
+        }
+        catch (JMSException e) {
+            logger.error("Failed to get {} property {}", ReplicaEventType.class.getSimpleName(), ReplicaEventType.EVENT_TYPE_PROPERTY, e);
+            return Optional.empty();
         }
     }
 
@@ -91,7 +113,11 @@ public class ReplicaBrokerEventListener implements MessageListener {
             consumerBrokerExchange.setRegion(broker);
             consumerBrokerExchange.setRegionDestination(destination);
             consumerBrokerExchange.setConnectionContext(broker.getAdminConnectionContext());
-            subscriptionHandler.createSubscriptionIfAbsent(ack.getConsumerId(), ack.getDestination());
+            final ConsumerId newOrExistingConsumerId = subscriptionHandler.createSubscriptionIfAbsent(
+                ack.getConsumerId(),
+                ack.getDestination()
+            );
+            ack.setConsumerId(newOrExistingConsumerId);
             RegionBroker regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
             Region region = regionBroker.getRegion(destination.getActiveMQDestination());
             region.acknowledge(consumerBrokerExchange, ack);
@@ -100,16 +126,37 @@ public class ReplicaBrokerEventListener implements MessageListener {
         }
     }
 
-    private Optional<ReplicaEventType> getEventType(final ActiveMQMessage message) {
-        try {
-            String eventTypeProperty = message.getStringProperty(ReplicaEventType.EVENT_TYPE_PROPERTY);
-            return Arrays.stream(ReplicaEventType.values())
-                .filter(t -> t.name().equals(eventTypeProperty))
-                .findFirst();
+    private void removeMessage(final MessageAck messageAck) {
+        for (Destination destination : broker.getDestinations(messageAck.getDestination())) {
+            try {
+                if (destination instanceof Queue) {
+                    ((Queue) destination).removeMessage(messageAck.getLastMessageId().toString());
+                } else if (destination instanceof Topic) {
+                    handleRemoveForTopic((Topic) destination, messageAck);
+                } else {
+                    logger.error("Unhandled destination type {} for ack {}", destination.getClass(), messageAck);
+                }
+            } catch (Exception e) {
+                logger.error("Failed to process removal for message ack {}", messageAck);
+            }
         }
-        catch (JMSException e) {
-            logger.error("Failed to get {} property {}", ReplicaEventType.class.getSimpleName(), ReplicaEventType.EVENT_TYPE_PROPERTY, e);
-            return Optional.empty();
+    }
+
+    private void handleRemoveForTopic(final Topic topic, final MessageAck messageAck) throws IOException {
+        Optional<Subscription> subscriptionForWhichThisAckIsReplicated = Optional.ofNullable(broker.getAdaptor(AbstractRegion.class))
+            .map(AbstractRegion.class::cast)
+            .map(AbstractRegion::getSubscriptions)
+            .map(subscriptions -> subscriptions.get(messageAck.getConsumerId()))
+            .filter(DurableTopicSubscription.class::isInstance);
+
+        if (subscriptionForWhichThisAckIsReplicated.isPresent()) {
+            org.apache.activemq.command.Message message = topic.loadMessage(messageAck.getFirstMessageId()); // TODO: think about efficiency of this and if we can just ack without a full message retrieval
+            topic.acknowledge(
+                broker.getAdminConnectionContext(),
+                subscriptionForWhichThisAckIsReplicated.get(),
+                messageAck,
+                new IndirectMessageReference(message)
+            );
         }
     }
 

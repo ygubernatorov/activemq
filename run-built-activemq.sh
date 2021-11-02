@@ -30,6 +30,8 @@ copy_and_start() {
   sed -i.bak 's/#ACTIVEMQ_DEBUG_OPTS/ACTIVEMQ_DEBUG_OPTS/g' ./broker1/bin/env
   sed -i.bak 's/#ACTIVEMQ_DEBUG_OPTS/ACTIVEMQ_DEBUG_OPTS/g' ./broker2/bin/env
   sed -i.bak 's/address=5005/address=5006/g' ./broker2/bin/env
+  sed -i.bak 's|ACTIVEMQ_SUNJMX_CONTROL=""|ACTIVEMQ_SUNJMX_CONTROL="--jmxurl service:jmx:rmi:///jndi/rmi://127.0.0.1:1099/jmxrmi"|g' ./broker1/bin/env
+  sed -i.bak 's|ACTIVEMQ_SUNJMX_CONTROL=""|ACTIVEMQ_SUNJMX_CONTROL="--jmxurl service:jmx:rmi:///jndi/rmi://127.0.0.1:1089/jmxrmi"|g' ./broker2/bin/env
 
   ./broker1/bin/activemq start
   ./broker2/bin/activemq start

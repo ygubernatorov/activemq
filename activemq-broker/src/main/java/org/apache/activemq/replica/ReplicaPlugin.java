@@ -5,7 +5,10 @@ import org.apache.activemq.broker.Broker;
 import org.apache.activemq.broker.BrokerPluginSupport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.net.URI;
 import java.util.Arrays;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * A Broker plugin to replicate core messaging events from one broker to another.
@@ -24,11 +27,21 @@ public class ReplicaPlugin extends BrokerPluginSupport {
     }
 
     @Override
-    public Broker installPlugin(final Broker broker) throws Exception {
+    public Broker installPlugin(final Broker broker) {
         logger.info("{} installed, running as {}", ReplicaPlugin.class.getName(), role);
         return role == ReplicaRole.replica
             ? new ReplicaBroker(broker, otherBrokerConnectionFactory)
             : new ReplicaSourceBroker(broker);
+    }
+
+    public ReplicaPlugin setRole(ReplicaRole role) {
+        this.role = requireNonNull(role);
+        return this;
+    }
+
+    public ReplicaPlugin connectedTo(URI uri) {
+        this.setOtherBrokerUri(requireNonNull(uri).toString());
+        return this;
     }
 
     /**

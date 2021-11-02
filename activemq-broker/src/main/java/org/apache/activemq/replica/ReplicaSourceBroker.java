@@ -17,6 +17,7 @@ import org.apache.activemq.broker.region.virtual.VirtualDestination;
 import org.apache.activemq.command.ActiveMQDestination;
 import org.apache.activemq.command.ActiveMQMessage;
 import org.apache.activemq.command.BrokerInfo;
+import org.apache.activemq.command.ConsumerId;
 import org.apache.activemq.command.ConsumerInfo;
 import org.apache.activemq.command.DestinationInfo;
 import org.apache.activemq.command.Message;
@@ -206,11 +207,12 @@ public class ReplicaSourceBroker extends BrokerFilter {
             return;
         }
         try {
+            final MessageAck ackToReplicate = createAckFromReference(reference, null);
             enqueueReplicaEvent(
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_CONSUMED)
-                    .setEventData(eventSerializer.serializeReplicationData(reference))
+                    .setEventData(eventSerializer.serializeReplicationData(ackToReplicate))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate consumption {}", reference.getMessageId(), e);
@@ -223,11 +225,12 @@ public class ReplicaSourceBroker extends BrokerFilter {
             return;
         }
         try {
+            final MessageAck ackToReplicate = createAckFromReference(reference, null);
             enqueueReplicaEvent(
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_DISCARDED)
-                    .setEventData(eventSerializer.serializeReplicationData(reference))
+                    .setEventData(eventSerializer.serializeReplicationData(ackToReplicate))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate discard of {}", reference.getMessageId(), e);
@@ -240,15 +243,22 @@ public class ReplicaSourceBroker extends BrokerFilter {
             return;
         }
         try {
+            final MessageAck ackToReplicate = createAckFromReference(reference, null);
             enqueueReplicaEvent(
                 context,
                 new ReplicaEvent()
                     .setEventType(ReplicaEventType.MESSAGE_EXPIRED)
-                    .setEventData(eventSerializer.serializeReplicationData(reference))
+                    .setEventData(eventSerializer.serializeReplicationData(ackToReplicate))
             );
         } catch (Exception e) {
             logger.error("Failed to replicate discard of {}", reference.getMessageId(), e);
         }
+    }
+
+    private MessageAck createAckFromReference(final MessageReference reference, final ConsumerId consumerId) {
+        final MessageAck ack = new MessageAck(reference.getMessage(), MessageAck.INDIVIDUAL_ACK_TYPE, 1);
+        ack.setConsumerId(consumerId);
+        return ack;
     }
 
 //
@@ -287,13 +297,13 @@ public class ReplicaSourceBroker extends BrokerFilter {
         return super.getDestinations(destination);
     }
 
-    @Override
+    @Override // it seems like this acknowledge is a client->server connection where the broker server is telling the client, ACK, got it
     public void acknowledge(final ConsumerBrokerExchange consumerExchange, final MessageAck ack) throws Exception {
         super.acknowledge(consumerExchange, ack);
-        if (consumerExchange.getSubscription().isBrowser() || !isReplicatedDestination(ack.getDestination())) {
-            return;
-        }
-        replicateAck(consumerExchange.getConnectionContext(), consumerExchange.getSubscription(), ack);
+//        if (consumerExchange.getSubscription().isBrowser() || !isReplicatedDestination(ack.getDestination())) {
+//            return;
+//        }
+//        replicateAck(consumerExchange.getConnectionContext(), consumerExchange.getSubscription(), ack);
     }
 
     @Override

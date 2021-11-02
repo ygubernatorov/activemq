@@ -864,7 +864,7 @@ public abstract class BaseDestination implements Destination {
         return hasRegularConsumers;
     }
 
-    public ConnectionContext createConnectionContext() {
+    public ConnectionContext createConnectionContext() { // In case you were wonderings how to create a connection context
         ConnectionContext answer = new ConnectionContext();
         answer.setBroker(this.broker);
         answer.getMessageEvaluationContext().setDestination(getActiveMQDestination());

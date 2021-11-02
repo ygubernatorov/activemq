@@ -7,8 +7,12 @@ import org.apache.activemq.broker.region.Region;
 import org.apache.activemq.broker.region.RegionBroker;
 import org.apache.activemq.broker.region.Subscription;
 import org.apache.activemq.command.ActiveMQDestination;
+import org.apache.activemq.command.ConnectionId;
 import org.apache.activemq.command.ConsumerId;
 import org.apache.activemq.command.ConsumerInfo;
+import org.apache.activemq.command.SessionId;
+import org.apache.activemq.util.IdGenerator;
+import org.apache.activemq.util.LongSequenceGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.time.Duration;
@@ -34,8 +38,11 @@ public class ReplicaBrokerSubscriptionHandler {
 
     private final Logger logger = LoggerFactory.getLogger(ReplicaBrokerSubscriptionHandler.class);
     private final AtomicLong subscriptionHandlerThreadId = new AtomicLong(0);
-    private final ScheduledExecutorService subscriptionHandler;
     private final Map<ConsumerId, Instant> knownConsumers = new ConcurrentHashMap<>();
+    private final IdGenerator connectionIdGenerator = new IdGenerator("replica");
+    private final LongSequenceGenerator sessionIdGenerator = new LongSequenceGenerator();
+    private final LongSequenceGenerator consumerIdGenerator = new LongSequenceGenerator();
+    private final ScheduledExecutorService subscriptionHandler;
     private final Broker broker;
     private final ConnectionContext replicaBrokerConnectionContext;
 
@@ -57,30 +64,36 @@ public class ReplicaBrokerSubscriptionHandler {
         replicaBrokerConnectionContext.setClientId("replica-internal-context");
     }
 
-    // TODO: durable subscribers
+    // TODO: durable subscribers replication
     void createDurableSubscription(final String clientId, final String subscriptionName) throws Exception {
 
     }
 
-    void createSubscriptionIfAbsent(final ConsumerId consumerId, final ActiveMQDestination destination) throws Exception {
-        if (knownConsumers.containsKey(consumerId)) {
-            logger.trace("Consumer {} already exists for destination {}", consumerId, destination);
-            return;
+    ConsumerId createSubscriptionIfAbsent(final ConsumerId incomingConsumerId, final ActiveMQDestination destination) throws Exception {
+        if (incomingConsumerId != null && knownConsumers.containsKey(incomingConsumerId)) {
+            logger.trace("Consumer {} already exists for destination {}", incomingConsumerId, destination);
+            return incomingConsumerId;
         }
+        ConsumerId consumerId = incomingConsumerId;
         RegionBroker regionBroker = (RegionBroker) broker.getAdaptor(RegionBroker.class);
         Region region = regionBroker.getRegion(destination);
         Subscription subscription = null;
-        if (region instanceof AbstractRegion) {
+        if (consumerId != null && region instanceof AbstractRegion) {
             subscription = ((AbstractRegion) region).getSubscriptions().get(consumerId);
             if (subscription != null) {
                 logger.debug("Will reuse an existing consumer subscription {} for destination {}", consumerId, destination);
                 knownConsumers.put(consumerId, Instant.now());
             }
         }
+        if (consumerId == null) {
+            ConnectionId connectionId = new ConnectionId(connectionIdGenerator.generateId());
+            SessionId sessionId = new SessionId(connectionId, sessionIdGenerator.getNextSequenceId());
+            consumerId = new ConsumerId(sessionId, consumerIdGenerator.getNextSequenceId());
+        }
         if (knownConsumers.get(consumerId) == null) {
             ConsumerInfo consumerInfo = new ConsumerInfo(consumerId);
             consumerInfo.setDestination(destination);
-            consumerInfo.setPrefetchSize(0);
+            consumerInfo.setPrefetchSize(1);
             logger.debug("Creating consumer {} on destination {}", consumerId, destination);
 //            consumerInfo.setSubscriptionName("consumer-for-"+consumerId);
             subscription = broker.addConsumer(
@@ -112,5 +125,6 @@ public class ReplicaBrokerSubscriptionHandler {
                 TimeUnit.SECONDS
             );
         }
+        return consumerId;
     }
 }
