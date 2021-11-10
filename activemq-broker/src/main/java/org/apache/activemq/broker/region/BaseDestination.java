@@ -18,6 +18,7 @@ package org.apache.activemq.broker.region;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.jms.ResourceAllocationException;
@@ -36,6 +37,7 @@ import org.apache.activemq.command.MessageAck;
 import org.apache.activemq.command.MessageDispatchNotification;
 import org.apache.activemq.command.ProducerInfo;
 import org.apache.activemq.filter.NonCachedMessageEvaluationContext;
+import org.apache.activemq.replica.ReplicaSourceBroker;
 import org.apache.activemq.security.SecurityContext;
 import org.apache.activemq.state.ProducerState;
 import org.apache.activemq.store.MessageStore;
@@ -522,6 +524,9 @@ public abstract class BaseDestination implements Destination {
     public void messageConsumed(ConnectionContext context, MessageReference messageReference) {
         if (advisoryForConsumed) {
             broker.messageConsumed(context, messageReference);
+        } else {
+            Optional.ofNullable(broker.getAdaptor(ReplicaSourceBroker.class))
+                .ifPresent(replicaBroker -> replicaBroker.messageConsumed(context, messageReference));
         }
     }
 
@@ -857,7 +862,7 @@ public abstract class BaseDestination implements Destination {
         return hasRegularConsumers;
     }
 
-    public ConnectionContext createConnectionContext() {
+    public ConnectionContext createConnectionContext() { // How to create a connection context
         ConnectionContext answer = new ConnectionContext();
         answer.setBroker(this.broker);
         answer.getMessageEvaluationContext().setDestination(getActiveMQDestination());
